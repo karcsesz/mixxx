@@ -9,12 +9,15 @@
 #include "mixxxtest.h"
 #include "test/signalpathtest.h"
 
-#define STEM_FILE QStringLiteral("stems/sin_%1.stem.mp4").arg(QString::fromStdString(GetParam()))
-
 namespace {
 const std::vector<std::string> supportedCodecs = {
         "AAC_256kbps_VBR",
         "ALAC_24bit"};
+
+const QList<QPair<QString, QString>> kSongs = {
+        {"stem01", "sin"},
+        {"stem02", "trance"},
+};
 } // namespace
 
 class StemControlFixture : public BaseSignalPathTest,
@@ -27,6 +30,9 @@ class StemControlFixture : public BaseSignalPathTest,
     QString getFxGroupForStem(const QString& deckGroup, int stemNr) {
         return QStringLiteral("[QuickEffectRack1_%1]")
                 .arg(getGroupForStem(deckGroup, stemNr));
+    }
+    QString GetStemFilePath(const QString& dir, const QString& song) {
+        return getTestDir().filePath(getTestDir().filePath("stems/%1/%2_%3.stem.mp4").arg(dir).arg(song).arg(QString::fromStdString(GetParam())));
     }
 
     void SetUp() override {
@@ -51,8 +57,8 @@ class StemControlFixture : public BaseSignalPathTest,
             m_pEffectsManager->addStem(stemHandleGroup);
         }
 
-        const QString kStemFileLocationTest = getTestDir().filePath(STEM_FILE);
-        TrackPointer pStemFile(Track::newTemporary(kStemFileLocationTest));
+        auto sourceStemPath = GetStemFilePath(kSongs[0].first, kSongs[0].second);
+        TrackPointer pStemFile(Track::newTemporary(sourceStemPath));
 
         loadTrack(m_pMixerDeck1.get(), pStemFile);
         loadTrack(m_pMixerDeck3.get(), pStemFile);
@@ -166,44 +172,57 @@ class StemControlFixture : public BaseSignalPathTest,
 };
 
 TEST_P(StemControlFixture, StemCount) {
-    EXPECT_EQ(m_pStemCount->get(), 4.0);
+    for (const auto& song : kSongs) {
+        EXPECT_EQ(m_pStemCount->get(), 4.0);
 
-    QString kTrackLocationTest = getTestDir().filePath(QStringLiteral("sine-30.wav"));
-    TrackPointer pTrack(Track::newTemporary(kTrackLocationTest));
-    loadTrack(m_pMixerDeck1.get(), pTrack);
+        QString kTrackLocationTest = getTestDir().filePath(QStringLiteral("sine-30.wav"));
+        TrackPointer pTrack(Track::newTemporary(kTrackLocationTest));
+        loadTrack(m_pMixerDeck1.get(), pTrack);
 
-    EXPECT_EQ(m_pStemCount->get(), 0.0);
+        EXPECT_EQ(m_pStemCount->get(), 0.0);
 
-    kTrackLocationTest = getTestDir().filePath(STEM_FILE);
-    pTrack = Track::newTemporary(kTrackLocationTest);
-    loadTrack(m_pMixerDeck1.get(), pTrack);
+        auto sourceStemPath = GetStemFilePath(song.first, song.second);
+        // We don't have ALAC for the second song yet, so skip it (same with other tests).
+        if (!QFileInfo::exists(sourceStemPath)) {
+            continue;
+        }
+        kTrackLocationTest = getTestDir().filePath(sourceStemPath);
+        pTrack = Track::newTemporary(kTrackLocationTest);
+        loadTrack(m_pMixerDeck1.get(), pTrack);
 
-    EXPECT_EQ(m_pStemCount->get(), 4.0);
+        EXPECT_EQ(m_pStemCount->get(), 4.0);
+    }
 }
 
 TEST_P(StemControlFixture, StemColor) {
-    EXPECT_EQ(m_pStem1Color->get(), 0xfd << 16 | 0x4a << 8 | 0x4a);
-    EXPECT_EQ(m_pStem2Color->get(), 0xff << 16 | 0xff << 8 | 0x00);
-    EXPECT_EQ(m_pStem3Color->get(), 0x00 << 16 | 0xe8 << 8 | 0xe8);
-    EXPECT_EQ(m_pStem4Color->get(), 0xad << 16 | 0x65 << 8 | 0xff);
+    for (const auto& song : kSongs) {
+        auto sourceStemPath = GetStemFilePath(song.first, song.second);
+        if (!QFileInfo::exists(sourceStemPath)) {
+            continue;
+        }
+        EXPECT_EQ(m_pStem1Color->get(), 0xfd << 16 | 0x4a << 8 | 0x4a);
+        EXPECT_EQ(m_pStem2Color->get(), 0xff << 16 | 0xff << 8 | 0x00);
+        EXPECT_EQ(m_pStem3Color->get(), 0x00 << 16 | 0xe8 << 8 | 0xe8);
+        EXPECT_EQ(m_pStem4Color->get(), 0xad << 16 | 0x65 << 8 | 0xff);
 
-    QString kTrackLocationTest = getTestDir().filePath(QStringLiteral("sine-30.wav"));
-    TrackPointer pTrack(Track::newTemporary(kTrackLocationTest));
-    loadTrack(m_pMixerDeck1.get(), pTrack);
+        QString kTrackLocationTest = getTestDir().filePath(QStringLiteral("sine-30.wav"));
+        TrackPointer pTrack(Track::newTemporary(kTrackLocationTest));
+        loadTrack(m_pMixerDeck1.get(), pTrack);
 
-    EXPECT_EQ(m_pStem1Color->get(), -1.0);
-    EXPECT_EQ(m_pStem2Color->get(), -1.0);
-    EXPECT_EQ(m_pStem3Color->get(), -1.0);
-    EXPECT_EQ(m_pStem4Color->get(), -1.0);
+        EXPECT_EQ(m_pStem1Color->get(), -1.0);
+        EXPECT_EQ(m_pStem2Color->get(), -1.0);
+        EXPECT_EQ(m_pStem3Color->get(), -1.0);
+        EXPECT_EQ(m_pStem4Color->get(), -1.0);
 
-    kTrackLocationTest = getTestDir().filePath(STEM_FILE);
-    pTrack = Track::newTemporary(kTrackLocationTest);
-    loadTrack(m_pMixerDeck1.get(), pTrack);
+        kTrackLocationTest = getTestDir().filePath(sourceStemPath);
+        pTrack = Track::newTemporary(kTrackLocationTest);
+        loadTrack(m_pMixerDeck1.get(), pTrack);
 
-    EXPECT_EQ(m_pStem1Color->get(), 0xfd << 16 | 0x4a << 8 | 0x4a);
-    EXPECT_EQ(m_pStem2Color->get(), 0xff << 16 | 0xff << 8 | 0x00);
-    EXPECT_EQ(m_pStem3Color->get(), 0x00 << 16 | 0xe8 << 8 | 0xe8);
-    EXPECT_EQ(m_pStem4Color->get(), 0xad << 16 | 0x65 << 8 | 0xff);
+        EXPECT_EQ(m_pStem1Color->get(), 0xfd << 16 | 0x4a << 8 | 0x4a);
+        EXPECT_EQ(m_pStem2Color->get(), 0xff << 16 | 0xff << 8 | 0x00);
+        EXPECT_EQ(m_pStem3Color->get(), 0x00 << 16 | 0xe8 << 8 | 0xe8);
+        EXPECT_EQ(m_pStem4Color->get(), 0xad << 16 | 0x65 << 8 | 0xff);
+    }
 }
 
 TEST_P(StemControlFixture, Volume) {
